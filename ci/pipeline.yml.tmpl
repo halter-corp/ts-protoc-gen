@@ -107,6 +107,9 @@ jobs:
             ARTIFACTORY_PASSWORD: ((artifactory-password))
             SSH_PRIVATE_KEY: |
               ((ssh-private-key))
+        - task: unit-test
+          file: tasks/node/tasks/unit-test-node-14.yml
+          input_mapping: {src: installed}
       - task: publish-node
         file: tasks/node/tasks/publish.yml
         params:
@@ -141,6 +144,9 @@ jobs:
               ARTIFACTORY_PASSWORD: ((artifactory-password))
               SSH_PRIVATE_KEY: |
                 ((ssh-private-key))
+          - task: unit-test
+            file: tasks/node/tasks/unit-test-node-14.yml
+            input_mapping: {src: installed}
         on_failure:
           in_parallel:
             - put: pull-request
