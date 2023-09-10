@@ -1,0 +1,176 @@
+---
+resource_types:
+  - name: pull-request
+    type: docker-image
+    source:
+      repository: teliaoss/github-pr-resource
+      tag: v0.21.0
+  - name: slack-post-resource
+    type: docker-image
+    source:
+      repository: jakobleben/slack-post-resource
+  - name: artifactory
+    type: docker-image
+    source:
+      repository: springio/artifactory-resource
+      tag: 0.0.18
+
+resources:
+  - name: ci
+    type: git
+    source:
+      uri: git@github.com:halter-corp/{{ (datasource "config").name }}.git
+      branch: {{ (datasource "config").branch }}
+      private_key: |
+        ((ssh-private-key))
+      paths:
+        - ci
+  - name: src
+    type: git
+    source:
+      uri: git@github.com:halter-corp/{{ (datasource "config").name }}.git
+      branch: {{ (datasource "config").branch }}
+      private_key: |
+        ((ssh-private-key))
+  - name: tasks
+    type: s3
+    source:
+      region_name: ap-southeast-2
+      bucket: halter-artifact-store
+      regexp: concourse-tasks/tasks/package-(\d+\.\d+\.\d+).tar.gz
+      access_key_id: ((tools-aws-access-key-id))
+      secret_access_key: ((tools-aws-secret-access-key))
+  - name: pull-request
+    type: pull-request
+    check_every: 24h
+    webhook_token: ((webhook-token))
+    source:
+      repository: halter-corp/{{ (datasource "config").name }}
+      access_token: ((github-token))
+  - name: slack
+    type: slack-post-resource
+    source:
+      token: ((slack-token))
+      channel_id: "{{ (datasource "config").slack_channel }}"
+  - name: version
+    type: semver
+    source:
+      driver: s3
+      bucket: halter-concourse-semver
+      key: {{ (datasource "config").name }}
+      access_key_id: ((tools-aws-access-key-id))
+      secret_access_key: ((tools-aws-secret-access-key))
+      region_name: ap-southeast-2
+      initial_version: 0.0.0
+
+jobs:
+  - name: bump-version
+    serial: true
+    plan:
+      - in_parallel:
+        - get: src
+          trigger: true
+        - get: tasks
+          params: {unpack: true}
+        - get: version
+          params:
+            bump: patch
+      - task: bump-version
+        file: tasks/semver/tasks/bump-version.yml
+      - in_parallel:
+        - put: version
+          params:
+            file:
+              bump/version
+        - put: src
+          params:
+            repository: src
+            tag_only: true
+            tag: bump/version
+
+  - name: build
+    serial: true
+    plan:
+      - in_parallel:
+        - get: src
+          passed: [bump-version]
+        - get: tasks
+          params: {unpack: true}
+        - get: version
+          passed: [bump-version]
+          trigger: true
+      - do:
+        - task: yarn
+          file: tasks/node/tasks/yarn-node-14.yml
+          params:
+            ARTIFACTORY_USERNAME: ((artifactory-username))
+            ARTIFACTORY_PASSWORD: ((artifactory-password))
+            SSH_PRIVATE_KEY: |
+              ((ssh-private-key))
+      - task: publish-node
+        file: tasks/node/tasks/publish.yml
+        params:
+          PACKAGE_NAME: {{ printf "\"%s/%s\"" (datasource "config").npm_scope (datasource "config").name }}
+          ARTIFACTORY_USERNAME: ((artifactory-username))
+          ARTIFACTORY_PASSWORD: ((artifactory-password))
+        input_mapping: {src: installed}
+
+  - name: pull-request
+    plan:
+      - in_parallel:
+        - get: tasks
+          params: {unpack: true}
+        - get: pull-request
+          version: every
+          trigger: true
+      - put: pull-request
+        params:
+          path: pull-request
+          status: pending
+      - in_parallel:
+        - do:
+            - task: validate-pipeline
+              file: tasks/concourse/tasks/render-pipeline.yml
+              input_mapping: {src: pull-request}
+        - do:
+          - task: yarn
+            file: tasks/node/tasks/yarn-node-14.yml
+            input_mapping: {src: pull-request}
+            params:
+              ARTIFACTORY_USERNAME: ((artifactory-username))
+              ARTIFACTORY_PASSWORD: ((artifactory-password))
+              SSH_PRIVATE_KEY: |
+                ((ssh-private-key))
+        on_failure:
+          in_parallel:
+            - put: pull-request
+              params:
+                path: pull-request
+                status: failure
+            - put: slack
+              params:
+                message:
+                  user_name: concourse
+                  text: {{ print "'pull request tests failed for " (datasource "config").name ": https://concourse.tools.halter.io/teams/{{$BUILD_TEAM_NAME}}/pipelines/{{$BUILD_PIPELINE_NAME}}/jobs/{{$BUILD_JOB_NAME}}/builds/{{$BUILD_NAME}}'" }}
+                  icon_emoji: ':airplane:'
+        on_success:
+          put: pull-request
+          params:
+            path: pull-request
+            status: success
+
+  - name: set-pipeline
+    serial: true
+    plan:
+      - in_parallel:
+        - get: ci
+          trigger: true
+          params: {submodules: none}
+        - get: tasks
+          params: {unpack: true}
+      - task: render-pipeline
+        file: tasks/concourse/tasks/render-pipeline.yml
+        input_mapping: {ci: ci, tasks: tasks}
+        output_mapping: {rendered: rendered}
+      - set_pipeline: {{ (datasource "config").name }}
+        file: rendered/pipeline.yml
