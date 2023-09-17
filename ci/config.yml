@@ -1,4 +1,4 @@
 name: ts-protoc-gen
-branch: master
+branch: main
 slack_channel: "#team_software_alerts"
 npm_scope: "@halter-corp"
