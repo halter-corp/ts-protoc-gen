@@ -116,6 +116,7 @@ jobs:
   - name: pull-request
     plan:
       - in_parallel:
+        - get: ci
         - get: tasks
           params: {unpack: true}
         - get: pull-request
