@@ -208,7 +208,7 @@ export function printMessage(fileName: string, exportMap: ExportMap, messageDesc
             canBeUndefined = true;
           }
         } else {
-          if (isProto2(fileDescriptor)) {
+          if (isProto2(fileDescriptor) || field.getProto3Optional()) {
             canBeUndefined = true;
           }
         }
