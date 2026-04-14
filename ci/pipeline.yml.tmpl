@@ -1,19 +1,14 @@
 ---
 resource_types:
   - name: pull-request
-    type: docker-image
+    type: registry-image
     source:
-      repository: teliaoss/github-pr-resource
-      tag: v0.21.0
+      repository: halternz/github-pr-resource
+      tag: 0.0.7
   - name: slack-post-resource
-    type: docker-image
+    type: registry-image
     source:
       repository: jakobleben/slack-post-resource
-  - name: artifactory
-    type: docker-image
-    source:
-      repository: springio/artifactory-resource
-      tag: 0.0.18
 
 resources:
   - name: ci
@@ -46,7 +41,7 @@ resources:
     webhook_token: ((webhook-token))
     source:
       repository: halter-corp/{{ (datasource "config").name }}
-      access_token: ((github-token))
+      access_token: ((github-automation.token))
   - name: slack
     type: slack-post-resource
     source:
