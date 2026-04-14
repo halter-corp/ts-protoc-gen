@@ -80,7 +80,7 @@ jobs:
         - put: src
           params:
             repository: src
-            tag_only: true
+            only_tag: true
             tag: bump/version
 
   - name: build
