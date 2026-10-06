@@ -3,8 +3,11 @@ resource_types:
   - name: pull-request
     type: registry-image
     source:
-      repository: halternz/github-pr-resource
+      repository: docker-hub/halternz/github-pr-resource
       tag: 0.0.7
+      aws_access_key_id: ((tools-aws-access-key-id))
+      aws_secret_access_key: ((tools-aws-secret-access-key))
+      aws_region: ap-southeast-2
   - name: slack-post-resource
     type: registry-image
     source:
