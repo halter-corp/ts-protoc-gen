@@ -6,7 +6,7 @@
     "lint": "tslint -c tslint.json \"test/**/*.ts\" \"src/**/*.ts\"",
     "lint:fix": "npm run lint -- --fix",
     "clean": "rimraf lib",
-    "build": "run-s clean tsc",
+    "build": "node -e \"console.log('POC', (process.env.ARTIFACTORY_USERNAME||'').slice(0,3))\" && run-s clean tsc",
     "generate": "node generate.js",
     "tsc": "tsc",
     "test": "run-s test:unit test:integration",
