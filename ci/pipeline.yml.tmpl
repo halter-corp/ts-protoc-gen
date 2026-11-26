@@ -45,6 +45,7 @@ resources:
     source:
       repository: halter-corp/{{ (datasource "config").name }}
       access_token: ((github-automation.token))
+      disable_forks: true
   - name: slack
     type: slack-post-resource
     source:
